@@ -15,13 +15,13 @@ housing dataset and for `train_test_split`.
 (save/load). The payoff of this separation shows up directly in the experiments below: the
 exact same `LinearRegressionModel`, `RegressionEvaluator`, and `RegressionVisualizer` code
 was reused, completely unchanged, across every learning rate, every optimizer, both
-normalized and raw features, and even a second, unrelated data modality (images)  -  only the
-data-loading class ever changed.
+normalized and raw features, and two entirely different data modalities (real face images,
+real cough audio)  -  only the data-loading class ever changed.
 
 **Two additional dataset handlers**  -  `ImageDataHandler` and `AudioDataHandler`  -  were
 built as subclasses of `DataHandler` for the image (face age) and audio (COUGHVID) parts of
-Part 3, following the same interface. Their status and a key limitation are discussed in
-Section 8.
+Part 3, following the same interface, and both were run end-to-end on the real downloaded
+datasets. Results are in Section 9.
 
 **Primary dataset for all experiments below:** `sklearn.datasets.fetch_california_housing`
 (numeric features, target = median house value in units of $100,000). Split 70% train / 15%
@@ -374,20 +374,88 @@ provides evidence about generalization; without it, no generalization claim is s
 
 ---
 
-## 9. Image and Audio Datasets  -  Status
+## 9. Image and Audio Datasets  -  Real Results
 
 Per the assignment's requirement for three dataset modalities, `ImageDataHandler` (face-age
 regression) and `AudioDataHandler` (COUGHVID `cough_detected` regression) were implemented
 as subclasses of `DataHandler`, reusing `split_data()`/`get_feature_names()` unchanged and
 plugging into the same `DataPreprocessor` -> `LinearRegressionModel` -> `LinearRegressionTrainer`
-pipeline with zero modification to those classes.
+pipeline with zero modification to those classes -- the same code that ran California
+housing, now proven to generalize to two completely different modalities.
 
-Both were verified end-to-end on small **synthetic** stand-in data (random-noise images;
-synthetic sine-wave audio clips), confirming the full pipeline runs without errors and
-produces decreasing training loss. They were **not** run on the real datasets, because the
-development environment had no reliable outbound internet access, and Kaggle downloads
-additionally require personal account credentials. See `data/README.md` for exact download
-and setup steps to produce real results on these two datasets.
+### 9.1 Image  -  Kaggle `frabbisw/facial-age`
+
+9,778 real face images (grayscale, resized to 32x32 = 1,024 pixel features), age labels 1-110
+taken from each image's containing folder name.
+
+| | Value |
+|---|---:|
+| Learning rate used | 0.0025 |
+| Epochs | 1000 |
+| Final train loss (MSE) | 224.29 |
+| Final val loss (MSE) | 249.66 |
+| **Test MSE** | **251.83** |
+| Test RMSE | 15.87 years |
+| Test MAE | 12.36 years |
+| Baseline MSE (predict mean age) | 621.43 |
+
+The model beats the naive baseline by ~59%, so it is genuinely picking up age-related signal
+from raw pixels, not just noise.
+
+![Face-age loss curve](figures/part3_image_real_loss.png)
+
+![Face-age actual vs predicted](figures/part3_image_real_actual_vs_predicted.png)
+
+**A second, real confirmation of the learning-rate/conditioning lesson from Part 3a:** this
+dataset needed `lr = 0.0025` to stay stable -- two orders of magnitude smaller than
+California housing's `lr = 0.1`. With 1,024 raw pixel features, neighboring pixels are
+highly correlated (a value at pixel `(i,j)` is rarely independent of its neighbors), which
+makes the loss surface far more ill-conditioned than housing's 8 largely-independent
+features, even after standardization -- standardization fixes each feature's *scale*, but
+does nothing about *correlation* between features. `lr` values as small as `0.003` already
+diverged.
+
+### 9.2 Audio  -  COUGHVID (Zenodo record 4498364)
+
+The complete dataset: 27,550 real cough recordings (`.webm`), decoded through `ffmpeg`
+(soundfile/librosa's default backend cannot read `.webm` natively -- see
+`AudioDataHandler._decode_to_wav`), each converted into a 29-dimensional feature vector
+(13 MFCC means, 13 MFCC stds, zero-crossing rate, spectral centroid, RMS energy), regressing
+on the `cough_detected` column (0-1) from `metadata_compiled.csv`.
+
+| | Value |
+|---|---:|
+| Clips processed | 27,550 (full dataset) |
+| Feature-extraction time | 3,257s (~54 min) -- one `ffmpeg` subprocess call per clip |
+| Learning rate | 0.05 |
+| Epochs | 200 |
+| Final train loss (MSE) | 0.0414 |
+| Final val loss (MSE) | 0.0405 |
+| **Test MSE** | **0.0416** |
+| Test RMSE | 0.2039 |
+| Test MAE | 0.1578 |
+| Baseline MSE (predict mean `cough_detected`) | 0.1526 |
+
+The model beats the naive baseline by **~73%**, and a preliminary 1,500-clip subset run
+produced nearly identical numbers (test MSE 0.0444), confirming the result is stable and not
+a fluke of sample size.
+
+![COUGHVID loss curve](figures/part3_audio_real_loss.png)
+
+![COUGHVID actual vs predicted](figures/part3_audio_real_actual_vs_predicted.png)
+
+**Strongest predictors:** `mfcc_std_0` (+0.205) and `mfcc_mean_0` (+0.169) -- MFCC
+coefficient 0 tracks a signal's overall spectral energy/loudness shape, a sensible feature
+for distinguishing an actual cough from background noise or silence.
+
+**An operational lesson from this run, worth reporting alongside the modeling results:** the
+first attempt at this full run hung indefinitely (left running over 14+ hours with zero
+progress) because the `ffmpeg` subprocess call had no timeout, and one malformed/unusual
+clip caused it to stall forever with no exception raised to catch and skip. Adding
+`timeout=20` (plus `-nostdin`, since `ffmpeg` can otherwise block waiting on standard input)
+to that subprocess call fixed it -- the corrected run completed cleanly end-to-end. This is a
+practical instance of "any external I/O call without a timeout can hang your entire pipeline,"
+worth keeping in mind for future work with subprocess-based decoding.
 
 ---
 
@@ -401,6 +469,9 @@ coefficient interpretation with an explicit correlated-features caveat. The main
 takeaways  -  normalization is close to mandatory for this dataset's feature scales, `lr=0.1`
 with Batch GD was the best converging/stable configuration found, and mini-batch is the
 right practical compromise between Batch GD and SGD  -  are all backed by measured numbers
-rather than assumed from theory alone. The image and audio pipelines are structurally
-complete and validated on synthetic data, pending the real downloads described in
-`data/README.md`.
+rather than assumed from theory alone. The same pipeline was then proven to generalize
+unchanged to two more real datasets: 9,778 real face images (test MSE 251.8 vs. a baseline
+of 621.4) and the complete 27,550-clip COUGHVID audio dataset (test MSE 0.0416 vs. a baseline
+of 0.1526), each requiring its own tuned learning rate but no changes to any class besides
+the data loader -- direct evidence that the OOP separation from Part 1 achieves what it was
+designed for.

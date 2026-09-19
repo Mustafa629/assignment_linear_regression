@@ -32,6 +32,8 @@ python experiments/part3b_normalization_experiment.py  # Part 3b: raw vs standar
 python experiments/part3c_optimizer_comparison.py      # Part 3c: Batch vs SGD vs Mini-batch
 python experiments/part4_test_evaluation.py            # Part 4: test-set metrics + plot
 python experiments/part7_coefficient_interpretation.py # Part 7: coefficient interpretation
+python experiments/part3_image_real_data.py            # Part 3: real face-age images
+python experiments/part3_audio_real_data.py             # Part 3: real COUGHVID audio (full set, ~1hr)
 ```
 
 `sklearn` is used ONLY for: loading `fetch_california_housing`, and `train_test_split`.
@@ -42,10 +44,11 @@ It is never used to fit the regression model itself.
 | Dataset | Modality | Status |
 |---|---|---|
 | `sklearn.datasets.fetch_california_housing` | Numeric | Fully run — all results in `report.md` |
-| Kaggle `frabbisw/facial-age` | Image (age regression) | `src/Data_Handler_Image.py` implemented and verified on synthetic data; **not run on real data** (no internet access in the environment this was built in — see `data/README.md`) |
-| COUGHVID (Zenodo record 4498364) | Audio (`cough_detected` regression) | `src/Data_Handler_Audio.py` implemented and verified on synthetic data; **not run on real data** — same reason |
+| Kaggle `frabbisw/facial-age` | Image (age regression) | Fully run on all 9,778 real images — test MSE 251.8 vs. baseline 621.4. See `report.md` Section 9.1 |
+| COUGHVID (Zenodo record 4498364) | Audio (`cough_detected` regression) | Fully run on all 27,550 real clips — test MSE 0.0416 vs. baseline 0.1526. See `report.md` Section 9.2 |
 
-See `data/README.md` for exactly what to download and how to point the handlers at it.
+`data/README.md` documents where each dataset lives locally (not committed to git — see
+`.gitignore` — since `data/coughvid/` alone is ~1.3GB) and how to re-download them.
 
 ## What's implemented
 
