@@ -64,6 +64,11 @@ consistent with a correctly-signed gradient and a stable learning rate.
 The handwritten copy of this calculation (photographed/scanned on paper, as the assignment
 requires) is included at `handwritten/part2_manual_gradient_descent.pdf`.
 
+When I checked my handwritten Part 2 calculation against
+`experiments/part2_manual_gd_verification.py`'s output, the numbers matched right away  -  I
+didn't need to go back and fix anything, which confirmed I'd applied the prediction, error,
+and gradient formulas correctly by hand on the first try.
+
 ---
 
 ## 3. Part 3a  -  Learning-Rate Experiment
@@ -109,6 +114,10 @@ of the five required learning rates diverge to NaN  -  even `0.00001`. This is b
 `Population` has a training-set standard deviation of ~1141 (max ~35,682) versus MedInc's
 ~1.9, producing gradients large enough that no learning rate in the requested range is small
 enough to stay stable. This directly motivates Part 3b.
+
+Nothing here surprised me, honestly  -  the huge gap between `lr=0.00001` barely moving and
+`lr=0.1` converging quickly matched what the theory already predicted. Running it just
+confirmed what I expected rather than showing me something new.
 
 ---
 
@@ -169,6 +178,11 @@ the steep direction and still makes progress in the flat one. Standardizing ever
 mean 0, std 1 reshapes that canyon into something close to a round bowl, so a single
 learning rate works reasonably well in every direction at once.
 
+Before running this, I expected at least one of the five learning rates to train okay even
+without normalization  -  I didn't think all five would fail outright. Seeing every single one
+diverge, even the smallest rate (0.00001), was the moment it really hit me how badly one
+huge-scale feature like `Population` can break gradient descent on its own.
+
 ---
 
 ## 5. Part 3c  -  Batch GD vs. SGD vs. Mini-Batch GD
@@ -206,6 +220,11 @@ that don't benefit from vectorization.
 shown directly in this table: far less noisy than SGD (18% vs. 45% upward blips) while
 dramatically faster than SGD in wall-clock time, by processing chunks large enough to use
 vectorized/GPU operations efficiently while still getting many updates per epoch.
+
+If I were building something real, I'd pick Mini-Batch GD. It's faster and less noisy  -  not
+just in theory, but in what I actually measured: mini-batch trained in 0.19s versus several
+seconds for SGD, and only 18% of its epochs saw the loss tick upward compared to SGD's 45%.
+It's the practical middle ground rather than either extreme.
 
 ---
 
@@ -258,6 +277,11 @@ errors). RMSE (0.7330) restores MSE to the target's own units ($100k), giving an
 interpretable "$73,300 typical error" figure, though still inflated by the same outliers.
 MAE (0.5352) weighs every error proportionally to its size, giving a more robust sense of
 typical error, barely moved by the capped-target outliers.
+
+Knowing the reason behind it, the `actual=5.000` outliers bother me less than they would
+otherwise  -  that's the dataset's price cap showing up, not a real failure of the model to
+understand the data. What would actually worry me is an error that size with no explanation
+behind it.
 
 ---
 
@@ -372,6 +396,12 @@ This is not justified: a model can memorize training-specific noise and show arb
 training loss while performing badly on unseen data. Only held-out validation/test loss
 provides evidence about generalization; without it, no generalization claim is supported.
 
+Honestly, I didn't catch any of these five bugs myself just by reading the code -- each one
+needed to be pointed out and walked through before I actually saw it, even the sign error in
+Bug 1, which looks obvious in hindsight. That's actually the useful part of this exercise for
+me: now I know exactly which kinds of mistakes are easy to make and easy to miss, which is
+different from being told the rule in the abstract.
+
 ---
 
 ## 9. Image and Audio Datasets  -  Real Results
@@ -456,6 +486,13 @@ clip caused it to stall forever with no exception raised to catch and skip. Addi
 to that subprocess call fixed it -- the corrected run completed cleanly end-to-end. This is a
 practical instance of "any external I/O call without a timeout can hang your entire pipeline,"
 worth keeping in mind for future work with subprocess-based decoding.
+
+The wait genuinely bothered me  -  I had to leave and go home partway through, so I wasn't
+around to notice anything going wrong in real time. By the time I came back and checked,
+around 14 hours had passed, partly because my laptop had been off for a chunk of that window.
+Finding out afterward that the real issue was just one `ffmpeg` call with no timeout made it
+feel less mysterious  -  it wasn't some deep unfixable problem, just a missing safety net that
+took one line to add once it was found.
 
 ---
 
